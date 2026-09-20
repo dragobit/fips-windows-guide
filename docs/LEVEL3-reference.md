@@ -39,6 +39,8 @@ FIPS v0.5.0 on Windows の内部動作・設定リファレンス・セキュリ
 | メッシュ I/F ファイアウォール(fips.nft) | ❌(Linux のみ) |
 | systemd 相当 | Windows サービス(SCM)。`--install-service` で登録 |
 
+> **「Ethernet ❌」は「LAN 非対応」ではありません。** ここで言う Ethernet トランスポートは *IP を介さない生レイヤー2フレーム*で直接メッシュを張る ground-up モード用のもので、Windows では未実装です。通常の LAN(IP ネットワーク)内での通信は **UDP トランスポート + mDNS 発見**(`rendezvous.lan`)で問題なく動きます。
+
 ## 3. `fips.yaml` 設定リファレンス(Windows 向け主要項目)
 
 完全なテンプレ例:
