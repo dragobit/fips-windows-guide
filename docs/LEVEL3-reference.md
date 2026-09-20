@@ -151,9 +151,22 @@ peers:
 
 ## 7. セキュリティ要点
 
+### 「運ぶノード」と「読めるノード」は分離している
+
+- **リンク層(FMP / Noise IK)**: 直接ピア間だけの hop-by-hop 暗号化。中継ノードはリンク層だけを復号して次ホップへ転送する。
+- **セッション層(FSP / Noise XK)**: 宛先 npub とのエンドツーエンド暗号。中継ノードはペイロードを読めない。見えるのは宛先ノードアドレス(公開鍵のハッシュ)程度。
+- ピアを許可する = 「自分のトラフィックの経路に入りうる相手」を決めること。中身を読まれることにはならないが、転送を請け負う/負わせる関係になる。
+
+### ピアリングの許可制御(admission)
+
+- 既定は **default-allow**: トランスポートに届いて Noise IK を完遂したノードは誰でもピアになれる。
+- 制御手段: `peers.allow`/`peers.deny`(allow 一致→許可、deny 一致→拒否、未一致→許可;厳格許可制は allow 列挙 + deny に `ALL`)、`accept_connections: false` / `outbound_only: true`、Nostr の `policy`(`configured_only` か `open`。open は無承認 → ACL 必須)。
+- Windows の ACL パスは §1 の注意参照(`C:\etc\fips\`)。
+
+### その他
+
 - **制御ソケット(TCP 127.0.0.1:21210)に ACL なし**: ローカルの任意プロセスが `connect`/`disconnect`/`inject-config` 可能。単独ユーザー端末向け。共用機では FW で 21210 への接続を絞ること。
 - **`fips.key` は nsec** — 平文を Git/チャットに出さない。Windows は親フォルダ ACL 継承(Unix の 0600 相当の強制はない)。`C:\ProgramData\fips` は既定で管理者のみ書き込み可。
-- **ピア ACL**(接続してよい相手の制御): `peers.allow`/`peers.deny`(Windows では `C:\etc\fips\` — §1 の注意参照)。評価順: allow 一致→許可、deny 一致→拒否、どちらも未一致→既定許可。厳格許可リストにするには `peers.allow` に npub を並べ `peers.deny` に `ALL`。
 - **`policy: open` は無承認**: ACL を正しく設定してから使う。
 - **メッシュ内側のサービス露出**: fips0 宛に来るトラフィックはホスト FW 次第(Windows に fips.nft 相当はない)。メッシュ限定サービスは fips0 のアドレスにバインド。
 - `node.identity.nsec:` を yaml に書く方式は、設定ファイル=秘密情報として ACL を厳しく。
