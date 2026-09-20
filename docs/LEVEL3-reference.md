@@ -149,7 +149,37 @@ peers:
 - `scope` を設定したノード同士だけが互いを見る。既定は無スコープ(同一 LAN の全 FIPS ノードが候補)。
 - Windows では「ネットワーク プロファイル」が「パブリック」だと mDNS の受信が FW に弾かれやすい — UDP 5353 受信許可(Level 2 Step 5)かネットワークを「プライベート」に。
 
-## 7. セキュリティ要点
+## 7. セッション(FSP)の確立と「繋がりやすさ」の設計
+
+目的の通信(SSH・ping 等の実データ)はセッション層(FSP / Noise XK、エンドツーエンド)で行われますが、**セッションは設定で「繋げる」ものではなく、最初のパケット送信時に自動で張られます**。オペレータが設計するのはその下の「メッシュへの経路」= ピア構成です。
+
+### セッションが張られるまでの流れ
+
+1. アプリが `<npub>.fips` に向けてパケットを送る(ping / ssh 等がトリガー)。
+2. デーモンが宛先を bloom フィルタ広告で探索 → 座標 lookup で経路を解決。
+3. 経路に沿って FSP ハンドシェイク(msg1/2/3、Noise XK)が走り、`established` になる。
+4. 以降のパケットはそのセッションに乗る。`fipsctl show sessions` / `fipstop` の Sessions タブで状態を観察できる。
+
+`fipsctl probe <npub>` はこの各段階(bloom → discovery → path → session → rtt)を個別に報告するので、「どこで止まっているか」の切り分けに使います。
+
+### ピア(経路)を確保する4つの手段
+
+| 状況 | 設定 | 性質 |
+|------|------|------|
+| 同一 LAN | `rendezvous.lan.enabled: true` | mDNS 自動発見。最少設定・最速 |
+| 相手のアドレスが既知 | `peers:` に npub + `udp/tcp addr` 直書き | 最も確実。アドレス管理が必要 |
+| npub だけ知っている | 相手 `advertise: true` / 自分 `via_nostr: true` | リレー経由でエンドポイント解決 |
+| 直接届かない | 共通の第三者ノードと双方がピアる | トランジット中継(例: 公開テストメッシュ) |
+
+### 繋がりやすさのための工夫
+
+- **自分も advert を出す**(`advertise: true` + `advertise_on_nostr: true`): 相手が npub のみでこちらを解決できる。
+- **NAT 内は `udp:nat` advert**(`public: false`)+ STUN。対称 NAT で失敗するなら片側に公開ポート(ポートフォワード or `external_addr`)が最も確実。
+- **UDP と TCP を両方 advert**: 相手の egress が UDP 遮断でも TCP(443 等)で拾える。
+- **共通の中継ピアを持つ**: 直接到達不能同士でも、双方がピアる安定ノード経由で繋がる。
+- **ACL が拒否していないか確認**: `peers.deny` に `ALL` を書いた厳格許可制では、相手 npub を `peers.allow` に登録必須。
+
+## 8. セキュリティ要点
 
 ### 「運ぶノード」と「読めるノード」は分離している
 
@@ -171,7 +201,7 @@ peers:
 - **メッシュ内側のサービス露出**: fips0 宛に来るトラフィックはホスト FW 次第(Windows に fips.nft 相当はない)。メッシュ限定サービスは fips0 のアドレスにバインド。
 - `node.identity.nsec:` を yaml に書く方式は、設定ファイル=秘密情報として ACL を厳しく。
 
-## 8. トラブルシューティング
+## 9. トラブルシューティング
 
 | 症状 | 確認・対処 |
 |------|-----------|
@@ -188,7 +218,7 @@ peers:
 | アドレスだけ知りたい | `fipsctl address [npub|短縮名]`(デーモン不要) |
 | 5段階の切り分け | `fipsctl probe <対象>`: bloom(メッシュがその宛先を知っているか) → discovery → path → session → rtt |
 
-## 9. 用語・プロトコル対応表
+## 10. 用語・プロトコル対応表
 
 | 用語 | 意味 |
 |------|------|
@@ -202,7 +232,7 @@ peers:
 | `udp:nat` | NAT 内ノードの advert エンドポイント。ホールパンチ合図 |
 | fips0 / "FIPS" | TUN アダプタ(Windows では wintun、アダプタ名 FIPS) |
 
-## 10. 参照リンク
+## 11. 参照リンク
 
 - 上流リポジトリ: <https://github.com/jmcorgan/fips> (`v0.5.0` タグ)
 - リリースノート v0.5.0: `docs/releases/release-notes-v0.5.0.md`
